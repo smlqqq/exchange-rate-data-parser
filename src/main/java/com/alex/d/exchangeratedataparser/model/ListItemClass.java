@@ -14,5 +14,4 @@ public class ListItemClass {
     private String gbpB;
     private String gbpS;
     private String imageUrl;
-    private String date;
 }
