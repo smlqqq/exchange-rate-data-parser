@@ -53,7 +53,7 @@ import java.util.Locale;
                 result.add("exchangeRates", data);
                 result.addProperty("timestamp", getCurrentDate());
 
-                log.info("JSON created successfully: " + result.toString());
+                log.info("JSON created successfully: " + result);
 
             } catch (Exception e) {
                 e.printStackTrace();

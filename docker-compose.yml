@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  app:
+    image: exchange-rate-data-parser
+    build:
+      context: .
+    ports:
+      - "9099:9099"
+#          docker-compose up --build
+
+#  docker login
+#  docker tag exchange-rate-data-parser a1j1oqnl52/exchange-rate-data-parser:latest
+#  docker push a1j1oqnl52/exchange-rate-data-parser:latest
