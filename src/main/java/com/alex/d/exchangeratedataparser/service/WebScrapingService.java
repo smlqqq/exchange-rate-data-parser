@@ -1,6 +1,5 @@
 package com.alex.d.exchangeratedataparser.service;
 
-import com.alex.d.exchangeratedataparser.model.ExchangeRate;
 import com.alex.d.exchangeratedataparser.model.ListItemClass;
 import com.alex.d.exchangeratedataparser.repository.ExchangeRateRepository;
 import com.google.gson.Gson;
@@ -31,10 +30,10 @@ public class WebScrapingService {
         return sdf.format(new Date());
     }
 
-        @Scheduled(cron = "0 0 12 * * ?")
-//    @Scheduled(cron = "*/10 * * * * *")
+    @Scheduled(cron = "*/10 * * * * *")
     public void scrapeAndSaveData() {
         scrapeData();
+        log.info("data successfully saved in db");
     }
 
     public JsonObject scrapeData() {
@@ -63,14 +62,10 @@ public class WebScrapingService {
             }
 
             result.add("exchangeRates", data);
-            result.addProperty("timestamp", getCurrentDate());
 
             log.info("JSON created successfully: " + result);
 
-            ExchangeRate exchangeRate = new ExchangeRate();
-            exchangeRate.setJsonData(result.toString());
-            exchangeRate.setTimestamp(getCurrentDate());
-            exchangeRateRepository.save(exchangeRate);
+            exchangeRateRepository.saveWithCast(result.toString(), getCurrentDate());
 
         } catch (Exception e) {
             e.printStackTrace();
