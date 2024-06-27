@@ -6,7 +6,7 @@ services:
       context: .
     ports:
       - "9099:9099"
-#          docker-compose up --build
+# docker-compose up --build
 
 #  docker login
 #  docker tag exchange-rate-data-parser a1j1oqnl52/exchange-rate-data-parser:latest
