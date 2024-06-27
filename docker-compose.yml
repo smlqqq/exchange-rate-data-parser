@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   app:
     image: exchange-rate-data-parser
@@ -6,6 +7,43 @@ services:
       context: .
     ports:
       - "9099:9099"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://pg-bank-bg-sined9206-5a33.c.aivencloud.com:10636/defaultdb
+      SPRING_DATASOURCE_USERNAME: avnadmin
+      SPRING_DATASOURCE_PASSWORD: AVNS_IcZzDXG1HHeOn84vcjk
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "true"
+      SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
+      SPRING_FLYWAY_ENABLED: "true"
+      SPRING_FLYWAY_LOCATIONS: classpath:db/migration
+      SPRING_FLYWAY_BASELINE_ON_MIGRATE: "true"
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      POSTGRES_DB: defaultdb
+      POSTGRES_USER: avnadmin
+      POSTGRES_PASSWORD: AVNS_IcZzDXG1HHeOn84vcjk
+    ports:
+      - "10636:10636"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  flyway:
+    image: flyway/flyway
+    container_name: flyway
+    depends_on:
+      - postgres
+    command: -url=jdbc:postgresql://pg-bank-bg-sined9206-5a33.c.aivencloud.com:10636/defaultdb -user=avnadmin -password=AVNS_IcZzDXG1HHeOn84vcjk -locations=filesystem:/flyway/sql migrate
+    volumes:
+      - ./db/migration:/flyway/sql
+
+volumes:
+  postgres_data:
+
 # docker-compose up --build
 
 #  docker login

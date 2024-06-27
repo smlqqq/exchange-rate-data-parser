@@ -32,7 +32,8 @@ public class WebScrapingService {
         return sdf.format(new Date());
     }
 
-    @Scheduled(cron = "0 0 12 * * *")
+//    @Scheduled(cron = "0 0 12 * * *")
+    @Scheduled(cron = "*/10 * * * * *")
     @CacheEvict(value = "exchangeRatesCache", allEntries = true)
     public void scrapeAndSaveData() {
         scrapeData();
@@ -66,7 +67,7 @@ public class WebScrapingService {
             }
 
             result.add("exchangeRates", data);
-
+            result.addProperty("timestamp", getCurrentDate());
             log.info("JSON created successfully: " + result);
 
             exchangeRateRepository.saveWithCast(result.toString(), getCurrentDate());

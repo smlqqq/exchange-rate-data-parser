@@ -1,0 +1,1 @@
+TRUNCATE TABLE exchange_rate RESTART IDENTITY;
