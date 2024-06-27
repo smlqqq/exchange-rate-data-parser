@@ -11,6 +11,8 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -30,12 +32,14 @@ public class WebScrapingService {
         return sdf.format(new Date());
     }
 
-    @Scheduled(cron = "*/10 * * * * *")
+    @Scheduled(cron = "0 0 12 * * *")
+    @CacheEvict(value = "exchangeRatesCache", allEntries = true)
     public void scrapeAndSaveData() {
         scrapeData();
         log.info("data successfully saved in db");
     }
 
+    @Cacheable(value = "exchangeRatesCache", key = "'exchangeRates'")
     public JsonObject scrapeData() {
         JsonObject result = new JsonObject();
         JsonArray data = new JsonArray();
