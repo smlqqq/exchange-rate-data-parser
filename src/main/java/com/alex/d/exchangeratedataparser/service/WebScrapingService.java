@@ -28,17 +28,23 @@ public class WebScrapingService {
     private ExchangeRateRepository exchangeRateRepository;
 
     private String getCurrentDate() {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
         return sdf.format(new Date());
     }
 
-//    @Scheduled(cron = "0 0 12 * * *")
-    @Scheduled(cron = "*/10 * * * * *")
+    @Scheduled(cron = "0 0 12 * * *")
     @CacheEvict(value = "exchangeRatesCache", allEntries = true)
     public void scrapeAndSaveData() {
-        scrapeData();
-        log.info("data successfully saved in db");
+        JsonObject data = scrapeData();
+        if (data != null && !data.has("error")) {
+            log.info("Data obtained from scrapeData: " + data);
+            exchangeRateRepository.saveWithCast(data.toString(), getCurrentDate());
+            log.info("Data successfully saved in db");
+        } else {
+            log.warning("Data scraping failed: " + data.get("error").getAsString());
+        }
     }
+
 
     @Cacheable(value = "exchangeRatesCache", key = "'exchangeRates'")
     public JsonObject scrapeData() {
@@ -74,7 +80,7 @@ public class WebScrapingService {
 
         } catch (Exception e) {
             e.printStackTrace();
-            result.addProperty("error", e.getMessage()); // Handle error if needed
+            result.addProperty("error", e.getMessage());
         }
         return result;
     }
