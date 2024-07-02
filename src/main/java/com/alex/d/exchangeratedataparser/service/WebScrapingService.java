@@ -1,5 +1,6 @@
 package com.alex.d.exchangeratedataparser.service;
 
+import com.alex.d.exchangeratedataparser.model.ExchangeRate;
 import com.alex.d.exchangeratedataparser.model.ListItemClass;
 import com.alex.d.exchangeratedataparser.repository.ExchangeRateRepository;
 import com.google.gson.Gson;
@@ -28,7 +29,7 @@ public class WebScrapingService {
     private ExchangeRateRepository exchangeRateRepository;
 
     private String getCurrentDate() {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault());
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
         return sdf.format(new Date());
     }
 
@@ -74,7 +75,7 @@ public class WebScrapingService {
 
             result.add("exchangeRates", data);
             result.addProperty("timestamp", getCurrentDate());
-            log.info("JSON created successfully: " + result);
+            log.info("JSON created successfully.");
 
             exchangeRateRepository.saveWithCast(result.toString(), getCurrentDate());
 
@@ -84,4 +85,5 @@ public class WebScrapingService {
         }
         return result;
     }
+
 }

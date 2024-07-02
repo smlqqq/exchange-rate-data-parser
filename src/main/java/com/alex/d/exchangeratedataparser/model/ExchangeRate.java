@@ -1,5 +1,6 @@
 package com.alex.d.exchangeratedataparser.model;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -16,4 +17,5 @@ public class ExchangeRate {
 
     @Column(name = "timestamp")
     private String timestamp;
+
 }

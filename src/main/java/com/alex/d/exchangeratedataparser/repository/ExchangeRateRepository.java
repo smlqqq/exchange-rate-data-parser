@@ -15,4 +15,7 @@ public interface ExchangeRateRepository extends JpaRepository<ExchangeRate, Long
     @Transactional
     @Query(value = "INSERT INTO exchange_rate (json_data, timestamp) VALUES (CAST(:jsonData AS jsonb), :timestamp)", nativeQuery = true)
     void saveWithCast(@Param("jsonData") String jsonData, @Param("timestamp") String timestamp);
+
+    ExchangeRate findTopByOrderByTimestampDesc();
+
 }
