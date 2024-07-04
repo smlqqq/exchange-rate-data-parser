@@ -13,6 +13,7 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -23,7 +24,7 @@ import java.util.Locale;
 
 @Service
 @Log
-public class WebScrapingService {
+public class WebScrapingService implements WebScrapingServiceImpl {
 
     @Autowired
     private ExchangeRateRepository exchangeRateRepository;
@@ -46,7 +47,7 @@ public class WebScrapingService {
         }
     }
 
-
+    //    http://localhost:9099/actuator/caches
     @Cacheable(value = "exchangeRatesCache", key = "'exchangeRates'")
     public JsonObject scrapeData() {
         JsonObject result = new JsonObject();
@@ -84,6 +85,42 @@ public class WebScrapingService {
             result.addProperty("error", e.getMessage());
         }
         return result;
+    }
+
+    @Cacheable(value = "latestExchangeRate", key = "'latest'")
+    public ExchangeRate getLatestExchangeRate() {
+        log.info("Fetching latestExchangeRate from cache or database");
+        return checkAndUpdateLatestExchangeRate();
+    }
+
+    public ExchangeRate checkAndUpdateLatestExchangeRate() {
+        ExchangeRate latestExchangeRate = exchangeRateRepository.findTopByOrderByTimestampDesc();
+        if (latestExchangeRate != null) {
+            updateCache(latestExchangeRate); // Обновляем кэш
+        }
+        return latestExchangeRate;
+    }
+
+    @CacheEvict(value = "latestExchangeRate", allEntries = true)
+    public void evictCache() {
+        log.info("Cache for latestExchangeRate evicted");
+    }
+
+    @Scheduled(cron = "0 0 13 * * *")
+    public void scheduledUpdateCache() {
+        log.info("Scheduled update cache for latestExchangeRate");
+        ExchangeRate latestExchangeRate = exchangeRateRepository.findTopByOrderByTimestampDesc();
+        if (latestExchangeRate != null) {
+            updateCache(latestExchangeRate);
+        } else {
+            evictCache(); // Очищаем кэш, если данные отсутствуют
+        }
+    }
+
+    @CachePut(value = "latestExchangeRate", key = "'latest'")
+    public ExchangeRate updateCache(ExchangeRate exchangeRate) {
+        log.info("Updating cache for latestExchangeRate with: " + exchangeRate);
+        return exchangeRate;
     }
 
 }
