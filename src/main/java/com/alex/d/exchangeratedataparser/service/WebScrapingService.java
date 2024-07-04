@@ -48,7 +48,7 @@ public class WebScrapingService implements WebScrapingServiceImpl {
     }
 
     //    http://localhost:9099/actuator/caches
-    @Cacheable(value = "exchangeRatesCache", key = "'exchangeRates'")
+    @Cacheable(value = "exchangeRatesCache", key = "'data'")
     public JsonObject scrapeData() {
         JsonObject result = new JsonObject();
         JsonArray data = new JsonArray();
@@ -87,21 +87,32 @@ public class WebScrapingService implements WebScrapingServiceImpl {
         return result;
     }
 
-    @Cacheable(value = "latestExchangeRate", key = "'latest'")
-    public ExchangeRate getLatestExchangeRate() {
-        log.info("Fetching latestExchangeRate from cache or database");
-        return checkAndUpdateLatestExchangeRate();
+    @Cacheable(value = "latestExchangeRates", key = "'latestData'")
+    public ExchangeRate getLatestExchangeRateFromCache() {
+        log.info("Fetching latestExchangeRate from cache");
+        return null; // This method should not return anything, just rely on caching mechanism
     }
 
-    public ExchangeRate checkAndUpdateLatestExchangeRate() {
+    public ExchangeRate getLatestExchangeRate() {
+        log.info("Fetching latestExchangeRate from database");
         ExchangeRate latestExchangeRate = exchangeRateRepository.findTopByOrderByTimestampDesc();
         if (latestExchangeRate != null) {
-            updateCache(latestExchangeRate); // Обновляем кэш
+            updateCache(latestExchangeRate);
         }
         return latestExchangeRate;
     }
 
-    @CacheEvict(value = "latestExchangeRate", allEntries = true)
+    public ExchangeRate checkAndUpdateLatestExchangeRate() {
+        ExchangeRate latestExchangeRate = exchangeRateRepository.findTopByOrderByTimestampDesc();
+        ExchangeRate cachedExchangeRate = getLatestExchangeRateFromCache();
+
+        if (latestExchangeRate != null && (cachedExchangeRate == null || !latestExchangeRate.getTimestamp().equals(cachedExchangeRate.getTimestamp()))) {
+            updateCache(latestExchangeRate);
+        }
+        return latestExchangeRate;
+    }
+
+    @CacheEvict(value = "latestExchangeRates", allEntries = true)
     public void evictCache() {
         log.info("Cache for latestExchangeRate evicted");
     }
@@ -109,18 +120,14 @@ public class WebScrapingService implements WebScrapingServiceImpl {
     @Scheduled(cron = "0 0 13 * * *")
     public void scheduledUpdateCache() {
         log.info("Scheduled update cache for latestExchangeRate");
-        ExchangeRate latestExchangeRate = exchangeRateRepository.findTopByOrderByTimestampDesc();
-        if (latestExchangeRate != null) {
-            updateCache(latestExchangeRate);
-        } else {
-            evictCache(); // Очищаем кэш, если данные отсутствуют
-        }
+        checkAndUpdateLatestExchangeRate();
     }
 
-    @CachePut(value = "latestExchangeRate", key = "'latest'")
+    @CachePut(value = "latestExchangeRates", key = "'latestData'")
     public ExchangeRate updateCache(ExchangeRate exchangeRate) {
         log.info("Updating cache for latestExchangeRate with: " + exchangeRate);
         return exchangeRate;
     }
+
 
 }
