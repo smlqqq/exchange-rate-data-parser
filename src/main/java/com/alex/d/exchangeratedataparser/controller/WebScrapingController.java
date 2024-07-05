@@ -32,9 +32,23 @@ public class WebScrapingController {
 
     @GetMapping("/data/latest")
     public JsonObject getLatestData() {
-        ExchangeRate latestExchangeRate = webScrapingService.getLatestExchangeRate();
-        JsonObject jsonObject = gson.fromJson(latestExchangeRate.getJsonData(), JsonObject.class);
-        log.info("Latest data from db parsed successfully");
-        return jsonObject;
+        log.info("Attempting to fetch latest data from cache");
+        ExchangeRate latestExchangeRate = webScrapingService.checkAndUpdateLatestExchangeRate();
+        if (latestExchangeRate == null) {
+            log.warning("Cache is empty.");
+            return new JsonObject();
+        } else {
+            JsonObject jsonObject = gson.fromJson(latestExchangeRate.getJsonData(), JsonObject.class);
+            log.info("Latest data from cache parsed successfully");
+            return jsonObject;
+        }
+    }
+    @GetMapping("/data/get")
+    public void get(){
+        webScrapingService.scheduledUpdateCache();
+    }
+    @GetMapping("/get")
+    public void getD(){
+        webScrapingService.scrapeAndSaveData();
     }
 }

@@ -35,6 +35,7 @@ public class WebScrapingService implements WebScrapingServiceImpl {
     }
 
     @Scheduled(cron = "0 0 12 * * *")
+//    @Scheduled(fixedRate = 5000)
     @CacheEvict(value = "exchangeRatesCache", allEntries = true)
     public void scrapeAndSaveData() {
         JsonObject data = scrapeData();
@@ -87,12 +88,9 @@ public class WebScrapingService implements WebScrapingServiceImpl {
         return result;
     }
 
-    @Cacheable(value = "latestExchangeRates", key = "'latestData'")
-    public ExchangeRate getLatestExchangeRateFromCache() {
-        log.info("Fetching latestExchangeRate from cache");
-        return null; // This method should not return anything, just rely on caching mechanism
-    }
-
+    /**
+     * Достаем последнюю запись из бд по временной метке
+     **/
     public ExchangeRate getLatestExchangeRate() {
         log.info("Fetching latestExchangeRate from database");
         ExchangeRate latestExchangeRate = exchangeRateRepository.findTopByOrderByTimestampDesc();
@@ -102,22 +100,17 @@ public class WebScrapingService implements WebScrapingServiceImpl {
         return latestExchangeRate;
     }
 
+    @Cacheable(value = "latestExchangeRates", key = "'latestData'")
+    /** Сверяем последнюю запись из бд с последней записью в кэше. **/
     public ExchangeRate checkAndUpdateLatestExchangeRate() {
         ExchangeRate latestExchangeRate = exchangeRateRepository.findTopByOrderByTimestampDesc();
-        ExchangeRate cachedExchangeRate = getLatestExchangeRateFromCache();
+        updateCache(latestExchangeRate);
 
-        if (latestExchangeRate != null && (cachedExchangeRate == null || !latestExchangeRate.getTimestamp().equals(cachedExchangeRate.getTimestamp()))) {
-            updateCache(latestExchangeRate);
-        }
         return latestExchangeRate;
     }
 
-    @CacheEvict(value = "latestExchangeRates", allEntries = true)
-    public void evictCache() {
-        log.info("Cache for latestExchangeRate evicted");
-    }
-
     @Scheduled(cron = "0 0 13 * * *")
+    @CacheEvict(value = "latestExchangeRates", allEntries = true)
     public void scheduledUpdateCache() {
         log.info("Scheduled update cache for latestExchangeRate");
         checkAndUpdateLatestExchangeRate();
@@ -128,6 +121,5 @@ public class WebScrapingService implements WebScrapingServiceImpl {
         log.info("Updating cache for latestExchangeRate with: " + exchangeRate);
         return exchangeRate;
     }
-
 
 }
