@@ -11,7 +11,6 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
@@ -26,8 +25,11 @@ import java.util.Locale;
 @Log
 public class WebScrapingService implements WebScrapingServiceImpl {
 
-    @Autowired
-    private ExchangeRateRepository exchangeRateRepository;
+    private final ExchangeRateRepository exchangeRateRepository;
+
+    public WebScrapingService(ExchangeRateRepository exchangeRateRepository) {
+        this.exchangeRateRepository = exchangeRateRepository;
+    }
 
     private String getCurrentDate() {
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
@@ -87,24 +89,17 @@ public class WebScrapingService implements WebScrapingServiceImpl {
         return result;
     }
 
+    // Получение последнего курса из кэша или БД
     @Cacheable(value = "latestExchangeRates", key = "'latestData'")
-    public ExchangeRate getLatestExchangeRateFromCache() {
-        log.info("Fetching latestExchangeRate from cache");
-        return null; // This method should not return anything, just rely on caching mechanism
-    }
-
     public ExchangeRate getLatestExchangeRate() {
-        log.info("Fetching latestExchangeRate from database");
-        ExchangeRate latestExchangeRate = exchangeRateRepository.findTopByOrderByTimestampDesc();
-        if (latestExchangeRate != null) {
-            updateCache(latestExchangeRate);
-        }
-        return latestExchangeRate;
+        log.info("Fetching latestExchangeRate from cache or database");
+        return null;
     }
 
+    // Проверка и обновление последнего курса
     public ExchangeRate checkAndUpdateLatestExchangeRate() {
         ExchangeRate latestExchangeRate = exchangeRateRepository.findTopByOrderByTimestampDesc();
-        ExchangeRate cachedExchangeRate = getLatestExchangeRateFromCache();
+        ExchangeRate cachedExchangeRate = getLatestExchangeRate();
 
         if (latestExchangeRate != null && (cachedExchangeRate == null || !latestExchangeRate.getTimestamp().equals(cachedExchangeRate.getTimestamp()))) {
             updateCache(latestExchangeRate);
@@ -117,7 +112,7 @@ public class WebScrapingService implements WebScrapingServiceImpl {
         log.info("Cache for latestExchangeRate evicted");
     }
 
-    @Scheduled(cron = "0 0 13 * * *")
+    @Scheduled(fixedRate = 5000)
     public void scheduledUpdateCache() {
         log.info("Scheduled update cache for latestExchangeRate");
         checkAndUpdateLatestExchangeRate();
@@ -128,6 +123,4 @@ public class WebScrapingService implements WebScrapingServiceImpl {
         log.info("Updating cache for latestExchangeRate with: " + exchangeRate);
         return exchangeRate;
     }
-
-
 }

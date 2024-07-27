@@ -32,9 +32,13 @@ public class WebScrapingController {
 
     @GetMapping("/data/latest")
     public JsonObject getLatestData() {
-        ExchangeRate latestExchangeRate = webScrapingService.getLatestExchangeRate();
+        ExchangeRate latestExchangeRate = webScrapingService.checkAndUpdateLatestExchangeRate();
+        if (latestExchangeRate == null) {
+            log.warning("No latest exchange rate found in cache");
+            return new JsonObject(); // Возвращаем пустой JSON, если данные не найдены
+        }
         JsonObject jsonObject = gson.fromJson(latestExchangeRate.getJsonData(), JsonObject.class);
-        log.info("Latest data from db parsed successfully");
+        log.info("Latest data from cache parsed successfully");
         return jsonObject;
     }
 }
