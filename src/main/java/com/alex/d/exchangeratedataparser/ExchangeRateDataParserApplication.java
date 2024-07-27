@@ -7,7 +7,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication
 @EnableScheduling
-@EnableCaching
 public class ExchangeRateDataParserApplication {
 
     public static void main(String[] args) {
