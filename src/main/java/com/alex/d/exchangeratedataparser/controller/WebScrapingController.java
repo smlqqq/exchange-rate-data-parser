@@ -2,7 +2,6 @@ package com.alex.d.exchangeratedataparser.controller;
 
 
 import com.alex.d.exchangeratedataparser.model.ExchangeRate;
-import com.alex.d.exchangeratedataparser.service.ExchangeRateService;
 import com.alex.d.exchangeratedataparser.service.WebScrapingService;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
@@ -18,11 +17,11 @@ public class WebScrapingController {
     private final Gson gson = new Gson();
 
     private final WebScrapingService webScrapingService;
-    private final ExchangeRateService exchangeRateService;
 
-    public WebScrapingController(WebScrapingService webScrapingService, ExchangeRateService exchangeRateService) {
+
+    public WebScrapingController(WebScrapingService webScrapingService) {
         this.webScrapingService = webScrapingService;
-        this.exchangeRateService = exchangeRateService;
+
     }
 
     @GetMapping("/data")
@@ -33,9 +32,13 @@ public class WebScrapingController {
 
     @GetMapping("/data/latest")
     public JsonObject getLatestData() {
-        ExchangeRate latestExchangeRate = exchangeRateService.getLatestExchangeRate();
+        ExchangeRate latestExchangeRate = webScrapingService.checkAndUpdateLatestExchangeRate();
+        if (latestExchangeRate == null) {
+            log.warning("No latest exchange rate found in cache");
+            return new JsonObject(); // Возвращаем пустой JSON, если данные не найдены
+        }
         JsonObject jsonObject = gson.fromJson(latestExchangeRate.getJsonData(), JsonObject.class);
-        log.info("Latest data from db parsed successfully");
+        log.info("Latest data from cache parsed successfully");
         return jsonObject;
     }
 }
