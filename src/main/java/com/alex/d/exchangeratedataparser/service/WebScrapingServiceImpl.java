@@ -19,6 +19,9 @@ import org.springframework.stereotype.Service;
 
 import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.Date;
 import java.util.Locale;
 
@@ -33,13 +36,16 @@ public class WebScrapingServiceImpl implements WebScrapingService {
         this.exchangeRateRepository = exchangeRateRepository;
     }
 
+    ZoneId chisinau = ZoneId.of("Europe/Chisinau");
+    ZonedDateTime zonedDateTime = ZonedDateTime.now(chisinau);
+
     @Scheduled(cron = "0 0 12 * * *")
     @CacheEvict(value = "exchangeRatesCache", allEntries = true)
     public void scrapeAndSaveData() {
         JsonObject data = scrapeData();
         if (data != null && !data.has("error")) {
             log.info("Data obtained from scrapeData: " + data);
-            exchangeRateRepository.saveWithCast(data.toString(), LocalDateTime.now().toString());
+            exchangeRateRepository.saveWithCast(data.toString(), zonedDateTime.toString());
             log.info("Data successfully saved in db");
         } else {
             log.warning("Data scraping failed: " + data.get("error").getAsString());
@@ -79,7 +85,7 @@ public class WebScrapingServiceImpl implements WebScrapingService {
             }
 
             result.add("exchangeRates", data);
-            result.addProperty("timestamp", LocalDateTime.now().toString());
+            result.addProperty("timestamp", zonedDateTime.toString());
             log.info("JSON created successfully with " + data.size() + " items.");
 
         } catch (Exception e) {
