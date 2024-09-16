@@ -39,7 +39,8 @@ public class WebScrapingServiceImpl implements WebScrapingService {
     ZoneId chisinau = ZoneId.of("Europe/Chisinau");
     ZonedDateTime zonedDateTime = ZonedDateTime.now(chisinau);
 
-    @Scheduled(cron = "0 0 12 * * *")
+//    @Scheduled(cron = "0 0 12 * * *")
+    @Scheduled(cron = "*/10 * * * *")
     @CacheEvict(value = "exchangeRatesCache", allEntries = true)
     public void scrapeAndSaveData() {
         JsonObject data = scrapeData();
@@ -117,7 +118,8 @@ public class WebScrapingServiceImpl implements WebScrapingService {
         log.info("Cache for latestExchangeRate evicted");
     }
 
-    @Scheduled(cron = "0 0 13 * * *") // Если требуется периодическое обновление кеша
+//    @Scheduled(cron = "0 0 13 * * *") // Если требуется периодическое обновление кеша
+    @Scheduled(cron = "*/12 * * * *") // Если требуется периодическое обновление кеша
     public void scheduledUpdateCache() {
         log.info("Scheduled update cache for latestExchangeRate");
         evictCache();
