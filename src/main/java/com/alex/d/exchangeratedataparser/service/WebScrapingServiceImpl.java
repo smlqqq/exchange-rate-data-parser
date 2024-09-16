@@ -17,10 +17,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
-import java.util.Date;
-import java.util.Locale;
 
 @Service
 @Log
@@ -33,7 +30,8 @@ public class WebScrapingServiceImpl implements WebScrapingService {
         this.exchangeRateRepository = exchangeRateRepository;
     }
 
-    @Scheduled(cron = "0 0 12 * * *")
+    // @Scheduled(cron = "0 0 12 * * *")
+    @Scheduled(fixedRate = 600000) // каждые 10 минут
     @CacheEvict(value = "exchangeRatesCache", allEntries = true)
     public void scrapeAndSaveData() {
         JsonObject data = scrapeData();
@@ -111,7 +109,8 @@ public class WebScrapingServiceImpl implements WebScrapingService {
         log.info("Cache for latestExchangeRate evicted");
     }
 
-    @Scheduled(cron = "0 0 13 * * *") // Если требуется периодическое обновление кеша
+    //@Scheduled(cron = "0 0 13 * * *")
+    @Scheduled(fixedRate = 720000) // 720000 milliseconds = 12 minutes
     public void scheduledUpdateCache() {
         log.info("Scheduled update cache for latestExchangeRate");
         evictCache();
