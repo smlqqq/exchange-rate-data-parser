@@ -18,6 +18,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 @Log
@@ -40,7 +42,8 @@ public class WebScrapingServiceImpl implements WebScrapingService {
             exchangeRateRepository.saveWithCast(data.toString(), LocalDateTime.now().toString());
             log.info("Data successfully saved in db");
         } else {
-            log.warning("Data scraping failed: " + data.get("error").getAsString());
+            String error = data != null && data.has("error") ? data.get("error").getAsString() : "Unknown error";
+            log.warning("Data scraping failed: " + error);
         }
     }
 
@@ -49,29 +52,14 @@ public class WebScrapingServiceImpl implements WebScrapingService {
         JsonObject result = new JsonObject();
         JsonArray data = new JsonArray();
         try {
-            Document doc = Jsoup.connect("https://valutar.md/ru").get();
-            Elements tbody = doc.getElementsByTag("tbody");
-            if (tbody.isEmpty()) {
-                throw new IllegalStateException("No tbody elements found on the page.");
-            }
-            Element ourTable = tbody.get(0);
-            int expectedRowCount = 21;
-            if (ourTable.children().size() < expectedRowCount) {
-                log.warning("Unexpected number of rows in the table. Expected: " + expectedRowCount + ", Found: " + ourTable.children().size());
-            }
+            Map<String, ListItemClass> mergedData = new HashMap<>();
 
-            for (int i = 0; i < Math.min(expectedRowCount, ourTable.children().size()); i++) {
-                ListItemClass item = new ListItemClass();
-                item.setBank(ourTable.children().get(i).child(0).text());
-                item.setUsdB(ourTable.children().get(i).child(1).text());
-                item.setUsdS(ourTable.children().get(i).child(2).text());
-                item.setEuroB(ourTable.children().get(i).child(3).text());
-                item.setEuroS(ourTable.children().get(i).child(4).text());
-                item.setRoLeuB(ourTable.children().get(i).child(7).text());
-                item.setRoLeuS(ourTable.children().get(i).child(8).text());
-                item.setGbpB(ourTable.children().get(i).child(11).text());
-                item.setGbpS(ourTable.children().get(i).child(12).text());
+            parseAndMerge(mergedData, "USD");
+            parseAndMerge(mergedData, "EUR");
+            parseAndMerge(mergedData, "RON");
+            parseAndMerge(mergedData, "GBP");
 
+            for (ListItemClass item : mergedData.values()) {
                 JsonObject jsonItem = gson.toJsonTree(item).getAsJsonObject();
                 data.add(jsonItem);
             }
@@ -85,6 +73,52 @@ public class WebScrapingServiceImpl implements WebScrapingService {
             result.addProperty("error", e.getMessage());
         }
         return result;
+    }
+
+    private void parseAndMerge(Map<String, ListItemClass> mergedData, String currency) throws Exception {
+        String url = "https://valutar.md/ru?currency=" + currency;
+        Document doc = Jsoup.connect(url).get();
+        Elements tbody = doc.getElementsByTag("tbody");
+        if (tbody.isEmpty()) {
+            log.warning("No tbody elements found for " + currency);
+            return;
+        }
+
+        Element ourTable = tbody.get(0);
+        for (Element row : ourTable.children()) {
+            if (row.children().size() < 3) continue;
+
+            String bank = row.child(0).text().trim();
+            if (bank.isEmpty() || bank.equalsIgnoreCase("Средний курс")) continue;
+
+            String buy = row.child(1).text().trim();
+            String sell = row.child(2).text().trim();
+
+            ListItemClass item = mergedData.computeIfAbsent(bank, k -> {
+                ListItemClass newItem = new ListItemClass();
+                newItem.setBank(k);
+                return newItem;
+            });
+
+            switch (currency) {
+                case "USD":
+                    item.setUsdB(buy);
+                    item.setUsdS(sell);
+                    break;
+                case "EUR":
+                    item.setEuroB(buy);
+                    item.setEuroS(sell);
+                    break;
+                case "RON":
+                    item.setRoLeuB(buy);
+                    item.setRoLeuS(sell);
+                    break;
+                case "GBP":
+                    item.setGbpB(buy);
+                    item.setGbpS(sell);
+                    break;
+            }
+        }
     }
 
     @Cacheable(value = "latestExchangeRates", key = "'latestData'")
