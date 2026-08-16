@@ -8,9 +8,9 @@ services:
     ports:
       - "9099:9099"
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://pg-bank-bg-sined9206-5a33.c.aivencloud.com:10636/defaultdb
+      SPRING_DATASOURCE_URL: jdbc:postgresql://pg-fe3df76-sined9206-5a33.g.aivencloud.com:10636/defaultdb
       SPRING_DATASOURCE_USERNAME: avnadmin
-      SPRING_DATASOURCE_PASSWORD: AVNS_IcZzDXG1HHeOn84vcjk
+      SPRING_DATASOURCE_PASSWORD: AVNS_RLkPzFo-RwnpjDAhMnL
       SPRING_JPA_HIBERNATE_DDL_AUTO: update
       SPRING_JPA_SHOW_SQL: "true"
       SPRING_JPA_PROPERTIES_HIBERNATE_DIALECT: org.hibernate.dialect.PostgreSQLDialect
@@ -26,7 +26,7 @@ services:
     environment:
       POSTGRES_DB: defaultdb
       POSTGRES_USER: avnadmin
-      POSTGRES_PASSWORD: AVNS_IcZzDXG1HHeOn84vcjk
+      POSTGRES_PASSWORD: AVNS_RLkPzFo-RwnpjDAhMnL
     ports:
       - "10636:10636"
     volumes:
@@ -37,7 +37,7 @@ services:
     container_name: flyway
     depends_on:
       - postgres
-    command: -url=jdbc:postgresql://pg-bank-bg-sined9206-5a33.c.aivencloud.com:10636/defaultdb -user=avnadmin -password=AVNS_IcZzDXG1HHeOn84vcjk -locations=filesystem:/flyway/sql migrate
+    command: -url=jdbc:postgresql://pg-fe3df76-sined9206-5a33.g.aivencloud.com:10636/defaultdb -user=avnadmin -password=AVNS_RLkPzFo-RwnpjDAhMnL -locations=filesystem:/flyway/sql migrate
     volumes:
       - ./db/migration:/flyway/sql
 
