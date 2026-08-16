@@ -19,10 +19,23 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 @Service
 @Slf4j
 public class WebScrapingServiceImpl implements WebScrapingService {
+
+    private static final String BASE_URL = "https://valutar.md";
+    private static final String BANKS_LIST_URL = BASE_URL + "/ru/banks";
+
+    // Currency names exactly as they appear in the "Валюта" column on a bank's
+    // page (ru locale). We match by "contains" so minor label differences
+    // (e.g. trailing notes) don't break matching.
+    private static final String CUR_USD = "Доллар США";
+    private static final String CUR_EUR = "Евро";
+    private static final String CUR_RON = "Румынский лей";
+    private static final String CUR_GBP = "Фунт стерлингов";
 
     private final ExchangeRateRepository exchangeRateRepository;
     private final RedisTemplate<String, Object> redisTemplate;
@@ -56,38 +69,52 @@ public class WebScrapingServiceImpl implements WebScrapingService {
         valueOperations.set("exchangeRates", exchangeRatesData.toString());
     }
 
+    /**
+     * IMPORTANT: valutar.md changed its markup. There is no longer a single
+     * "tbody with 21 rows / fixed column indices" table that lists every
+     * bank x currency pair. Instead:
+     *
+     *  - https://valutar.md/ru/curs shows a "Организация | покупка | продажа"
+     *    table, but only for ONE currency at a time (selected via a dropdown
+     *    filter) — not useful for a single-pass multi-currency scrape.
+     *  - https://valutar.md/ru/banks/{slug} shows a "Валюта | покупка | продажа"
+     *    table with EVERY currency for that ONE bank.
+     *
+     * So we now: 1) discover the current list of bank pages from
+     * /ru/banks, 2) visit each bank page and pick out the currencies we
+     * need BY NAME instead of by column position (fixed indices are exactly
+     * what broke last time and will break again the next time the site
+     * reorders or adds a column).
+     *
+     * NOTE: I could not inspect the live raw HTML/CSS classes directly (only
+     * a cleaned text/markdown extraction of the page was available to me),
+     * so table/row selectors below are written defensively (by header text
+     * and by currency name) rather than assuming specific class names.
+     * Please sanity-check against the real page once and adjust the
+     * selectors in fetchBankLinks()/scrapeBankPage() if needed.
+     */
     @Cacheable(value = "exchangeRatesCache", key = "'data'")
     public JsonArray scrapeData() {
         JsonArray data = new JsonArray();
         try {
-            Document doc = Jsoup.connect("https://valutar.md/ru").get();
-            Elements tbody = doc.getElementsByTag("tbody");
+            Map<String, String> bankLinks = fetchBankLinks();
 
-            if (tbody.isEmpty()) {
-                throw new IllegalStateException("No tbody elements found on the page.");
+            if (bankLinks.isEmpty()) {
+                throw new IllegalStateException("No bank links found on " + BANKS_LIST_URL);
             }
 
-            Element ourTable = tbody.get(0);
-            int expectedRowCount = 21;
-
-            if (ourTable.children().size() < expectedRowCount) {
-                log.warn("Unexpected number of rows in the table. Expected: " + expectedRowCount + ", Found: " + ourTable.children().size());
-            }
-
-            for (int i = 0; i < Math.min(expectedRowCount, ourTable.children().size()); i++) {
-                ListItemClass item = new ListItemClass();
-                item.setBank(ourTable.children().get(i).child(0).text());
-                item.setUsdB(ourTable.children().get(i).child(1).text());
-                item.setUsdS(ourTable.children().get(i).child(2).text());
-                item.setEuroB(ourTable.children().get(i).child(3).text());
-                item.setEuroS(ourTable.children().get(i).child(4).text());
-                item.setRoLeuB(ourTable.children().get(i).child(7).text());
-                item.setRoLeuS(ourTable.children().get(i).child(8).text());
-                item.setGbpB(ourTable.children().get(i).child(11).text());
-                item.setGbpS(ourTable.children().get(i).child(12).text());
-
-                JsonObject jsonItem = gson.toJsonTree(item).getAsJsonObject();
-                data.add(jsonItem);
+            for (Map.Entry<String, String> entry : bankLinks.entrySet()) {
+                String bankName = entry.getKey();
+                String bankUrl = entry.getValue();
+                try {
+                    ListItemClass item = scrapeBankPage(bankName, bankUrl);
+                    if (item != null) {
+                        JsonObject jsonItem = gson.toJsonTree(item).getAsJsonObject();
+                        data.add(jsonItem);
+                    }
+                } catch (Exception e) {
+                    log.error("Error scraping bank page {} ({}): {}", bankName, bankUrl, e.getMessage());
+                }
             }
             log.info("JSON created successfully with " + data.size() + " items.");
         } catch (Exception e) {
@@ -96,6 +123,80 @@ public class WebScrapingServiceImpl implements WebScrapingService {
         return data;
     }
 
+    /**
+     * Reads https://valutar.md/ru/banks and returns bank name -> bank page URL,
+     * e.g. "Banca Națională" -> "https://valutar.md/ru/banks/banca-nationala".
+     * We look for links whose href matches the /banks/{slug} pattern rather
+     * than hardcoding the list of banks, so new/removed banks are picked up
+     * automatically.
+     */
+    private Map<String, String> fetchBankLinks() throws Exception {
+        Map<String, String> links = new LinkedHashMap<>();
+        Document doc = Jsoup.connect(BANKS_LIST_URL)
+                .userAgent("Mozilla/5.0 (compatible; ExchangeRateBot/1.0)")
+                .get();
+
+        Elements anchors = doc.select("a[href*=/banks/]");
+        for (Element a : anchors) {
+            String href = a.attr("abs:href");
+            String text = a.text().trim();
+            // skip nav/breadcrumb links like ".../banks" itself, only keep ".../banks/some-slug"
+            if (href.matches(".*/banks/[a-z0-9\\-]+/?$") && !text.isEmpty()) {
+                links.putIfAbsent(text, href);
+            }
+        }
+        return links;
+    }
+
+    private ListItemClass scrapeBankPage(String bankName, String bankUrl) throws Exception {
+        Document doc = Jsoup.connect(bankUrl)
+                .userAgent("Mozilla/5.0 (compatible; ExchangeRateBot/1.0)")
+                .get();
+
+        // Find the rates table: the one whose text mentions both "покупка" and "продажа".
+        Element table = null;
+        for (Element candidate : doc.select("table")) {
+            String headText = candidate.text().toLowerCase();
+            if (headText.contains("покупка") && headText.contains("продажа")) {
+                table = candidate;
+                break;
+            }
+        }
+        if (table == null) {
+            log.warn("No rate table found for bank {} at {}", bankName, bankUrl);
+            return null;
+        }
+
+        ListItemClass item = new ListItemClass();
+        item.setBank(bankName);
+
+        for (Element row : table.select("tr")) {
+            // skip header row(s)
+            if (!row.select("th").isEmpty()) continue;
+
+            Elements cells = row.select("td");
+            if (cells.size() < 3) continue;
+
+            String currencyName = cells.get(0).text().trim();
+            String buy = cells.get(1).text().trim();
+            String sell = cells.get(2).text().trim();
+
+            if (currencyName.contains(CUR_USD)) {
+                item.setUsdB(buy);
+                item.setUsdS(sell);
+            } else if (currencyName.contains(CUR_EUR)) {
+                item.setEuroB(buy);
+                item.setEuroS(sell);
+            } else if (currencyName.contains(CUR_RON)) {
+                item.setRoLeuB(buy);
+                item.setRoLeuS(sell);
+            } else if (currencyName.contains(CUR_GBP)) {
+                item.setGbpB(buy);
+                item.setGbpS(sell);
+            }
+        }
+        return item;
+    }
 
     @Override
     public ExchangeRate getLatestExchangeRate() {
