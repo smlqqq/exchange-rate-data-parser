@@ -2,6 +2,9 @@ package com.alex.d.exchangeratedataparser.controller;
 
 
 import com.alex.d.exchangeratedataparser.service.WebScrapingServiceImpl;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import lombok.extern.java.Log;
@@ -14,7 +17,6 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 @RequestMapping("/api")
 public class WebScrapingController {
-    private final Gson gson = new Gson();
 
     private final WebScrapingServiceImpl webScrapingServiceImpl;
 
@@ -24,43 +26,9 @@ public class WebScrapingController {
 
     }
 
-    //    TODO Разобраться с Сериализацией json объекта
-//    @GetMapping("/data")
-//    public JsonObject getData() {
-//        log.info("Fetching data from scrapeData method");
-//        return webScrapingServiceImpl.scrapeData();
-//    }
-
-
-//
-//    @GetMapping("/data/latest")
-//    public JsonArray getLatestData() {
-//        ExchangeRate latestExchangeRate = webScrapingServiceImpl.checkAndUpdateLatestExchangeRate();
-//        if (latestExchangeRate == null) {
-//            log.warning("No latest exchange rate found in cache");
-//            return new JsonArray();
-//        }
-//
-//        try {
-//            JsonArray jsonArray = gson.fromJson(latestExchangeRate.getJsonData(), JsonArray.class);
-//            log.info("Latest data from cache parsed successfully");
-//            return jsonArray;
-//        } catch (JsonSyntaxException e) {
-//            log.severe("Failed to parse JSON data: " + e.getMessage());
-//            return new JsonArray();
-//        }
-//    }
-
-
     @GetMapping("/data/latest")
-    public JsonArray getLatestData() {
-        try {
-            JsonArray jsonArray = webScrapingServiceImpl.getLatestDataFromCache();
-            log.info("Returning latest exchange rates data from cache");
-            return jsonArray;
-        } catch (Exception e) {
-            log.error("Error fetching latest exchange rates", e);
-            return new JsonArray();
-        }
+    public JsonNode getLatestData() throws JsonProcessingException {
+        JsonArray jsonArray = webScrapingServiceImpl.getLatestDataFromCache();
+        return new ObjectMapper().readTree(jsonArray.toString());
     }
 }
