@@ -2,8 +2,7 @@ package com.alex.d.exchangeratedataparser.service;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
@@ -13,10 +12,9 @@ import java.sql.Statement;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+@Slf4j
 @Component
 public class ExchangeRateListener {
-
-    private static final Logger log = LoggerFactory.getLogger(ExchangeRateListener.class);
 
     private final WebScrapingService webScrapingService;
     private final DataSource dataSource;
