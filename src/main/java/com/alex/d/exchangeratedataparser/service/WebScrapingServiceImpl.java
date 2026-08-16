@@ -131,21 +131,28 @@ public class WebScrapingServiceImpl implements WebScrapingService {
      * automatically.
      */
     private Map<String, String> fetchBankLinks() throws Exception {
-        Map<String, String> links = new LinkedHashMap<>();
         Document doc = Jsoup.connect(BANKS_LIST_URL)
                 .userAgent("Mozilla/5.0 (compatible; ExchangeRateBot/1.0)")
                 .get();
 
-        Elements anchors = doc.select("a[href*=/banks/]");
-        for (Element a : anchors) {
+        Map<String, String> hrefToName = new LinkedHashMap<>();
+        for (Element a : doc.select("a[href*=/banks/]")) {
             String href = a.attr("abs:href");
             String text = a.text().trim();
-            // skip nav/breadcrumb links like ".../banks" itself, only keep ".../banks/some-slug"
-            if (href.matches(".*/banks/[a-z0-9\\-]+/?$") && !text.isEmpty()) {
-                links.putIfAbsent(text, href);
-            }
+
+            if (!href.matches(".*/banks/[a-z0-9\\-]+/?$")) continue;
+            if (text.isEmpty() || text.equalsIgnoreCase("Подробнее")) continue;
+
+            // dedupe by href, not by text — a bank can have both a name link
+            // and a "read more" link pointing at the same page
+            hrefToName.putIfAbsent(href, text);
         }
-        return links;
+
+        Map<String, String> nameToHref = new LinkedHashMap<>();
+        for (Map.Entry<String, String> e : hrefToName.entrySet()) {
+            nameToHref.put(e.getValue(), e.getKey());
+        }
+        return nameToHref;
     }
 
     private ListItemClass scrapeBankPage(String bankName, String bankUrl) throws Exception {

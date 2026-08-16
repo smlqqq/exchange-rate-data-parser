@@ -9,6 +9,8 @@ import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import lombok.extern.java.Log;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,8 +29,17 @@ public class WebScrapingController {
     }
 
     @GetMapping("/data/latest")
-    public JsonNode getLatestData() throws JsonProcessingException {
-        JsonArray jsonArray = webScrapingServiceImpl.getLatestDataFromCache();
-        return new ObjectMapper().readTree(jsonArray.toString());
+    public ResponseEntity<String> getLatestData() {
+        try {
+            JsonArray jsonArray = webScrapingServiceImpl.getLatestDataFromCache();
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(jsonArray.toString());
+        } catch (Exception e) {
+            log.error("Error fetching latest exchange rates", e);
+            return ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body("[]");
+        }
     }
 }
