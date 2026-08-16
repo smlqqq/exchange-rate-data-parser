@@ -6,58 +6,72 @@ import com.alex.d.exchangeratedataparser.repository.ExchangeRateRepository;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.cache.annotation.CacheEvict;
-import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 
 @Service
-@Log
+@Slf4j
 public class WebScrapingServiceImpl implements WebScrapingService {
 
     private final ExchangeRateRepository exchangeRateRepository;
+    private final RedisTemplate<String, Object> redisTemplate;
     private final Gson gson = new Gson();
 
-    public WebScrapingServiceImpl(ExchangeRateRepository exchangeRateRepository) {
+    public WebScrapingServiceImpl(ExchangeRateRepository exchangeRateRepository, RedisTemplate<String, Object> redisTemplate) {
         this.exchangeRateRepository = exchangeRateRepository;
+        this.redisTemplate = redisTemplate;
     }
 
-    // @Scheduled(cron = "0 0 12 * * *")
+    // @Scheduled(cron = "0 0 12 * * *")  // каждый день в 12:00
     @Scheduled(fixedRate = 600000) // каждые 10 минут
     @CacheEvict(value = "exchangeRatesCache", allEntries = true)
     public void scrapeAndSaveData() {
-        JsonObject data = scrapeData();
-        if (data != null && !data.has("error")) {
+        JsonArray data = scrapeData().getAsJsonArray();
+        if (data != null && !data.isEmpty()) {
             log.info("Data obtained from scrapeData: " + data);
+
             exchangeRateRepository.saveWithCast(data.toString(), LocalDateTime.now().toString());
             log.info("Data successfully saved in db");
+
+            updateRedisCache(data);
         } else {
-            log.warning("Data scraping failed: " + data.get("error").getAsString());
+            log.warn("Data scraping failed");
         }
     }
 
+    public void updateRedisCache(JsonArray exchangeRatesData) {
+        log.info("Updating Redis cache with new exchange rates data");
+        ValueOperations<String, Object> valueOperations = redisTemplate.opsForValue();
+        valueOperations.set("exchangeRates", exchangeRatesData.toString());
+    }
+
     @Cacheable(value = "exchangeRatesCache", key = "'data'")
-    public JsonObject scrapeData() {
-        JsonObject result = new JsonObject();
+    public JsonArray scrapeData() {
         JsonArray data = new JsonArray();
         try {
             Document doc = Jsoup.connect("https://valutar.md/ru").get();
             Elements tbody = doc.getElementsByTag("tbody");
+
             if (tbody.isEmpty()) {
                 throw new IllegalStateException("No tbody elements found on the page.");
             }
+
             Element ourTable = tbody.get(0);
             int expectedRowCount = 21;
+
             if (ourTable.children().size() < expectedRowCount) {
-                log.warning("Unexpected number of rows in the table. Expected: " + expectedRowCount + ", Found: " + ourTable.children().size());
+                log.warn("Unexpected number of rows in the table. Expected: " + expectedRowCount + ", Found: " + ourTable.children().size());
             }
 
             for (int i = 0; i < Math.min(expectedRowCount, ourTable.children().size()); i++) {
@@ -75,51 +89,49 @@ public class WebScrapingServiceImpl implements WebScrapingService {
                 JsonObject jsonItem = gson.toJsonTree(item).getAsJsonObject();
                 data.add(jsonItem);
             }
-
-            result.add("exchangeRates", data);
-            result.addProperty("timestamp", LocalDateTime.now().toString());
             log.info("JSON created successfully with " + data.size() + " items.");
-
         } catch (Exception e) {
-            log.severe("Error during data scraping: " + e.getMessage());
-            result.addProperty("error", e.getMessage());
+            log.error("Error during data scraping: ", e);
         }
-        return result;
+        return data;
     }
 
-    @Cacheable(value = "latestExchangeRates", key = "'latestData'")
+
+    @Override
     public ExchangeRate getLatestExchangeRate() {
-        log.info("Fetching latestExchangeRate from cache or database");
-        return exchangeRateRepository.findTopByOrderByTimestampDesc();
+        return null;
+    }
+
+
+    public JsonArray getLatestDataFromCache() {
+        log.info("Fetching exchange rates from Redis cache");
+        ValueOperations<String, Object> valueOperations = redisTemplate.opsForValue();
+        String data = (String) valueOperations.get("exchangeRates");
+        if (data != null) {
+            return gson.fromJson(data, JsonArray.class);
+        } else
+            log.warn("No exchange rates found in Redis cache");
+        JsonArray exchangeRatesData = scrapeData();
+        return gson.fromJson(exchangeRatesData, JsonArray.class);
     }
 
     @Override
     public ExchangeRate checkAndUpdateLatestExchangeRate() {
-        ExchangeRate latestExchangeRate = exchangeRateRepository.findTopByOrderByTimestampDesc();
-        ExchangeRate cachedExchangeRate = getLatestExchangeRate();
+        JsonArray latestData = getLatestDataFromCache();
 
-        if (latestExchangeRate != null && (cachedExchangeRate == null || !latestExchangeRate.getTimestamp().equals(cachedExchangeRate.getTimestamp()))) {
-            updateCache(latestExchangeRate);
+        if (latestData != null) {
+            log.info("Latest data fetched from Redis cache");
+            return null;
         }
-        return latestExchangeRate;
+
+        log.info("No data found in cache, fetching from database");
+        return exchangeRateRepository.findTopByOrderByTimestampDesc();
     }
 
-    @CacheEvict(value = "latestExchangeRates", allEntries = true)
-    public void evictCache() {
-        log.info("Cache for latestExchangeRate evicted");
-    }
-
-    //@Scheduled(cron = "0 0 13 * * *")
-    @Scheduled(fixedRate = 720000) // 720000 milliseconds = 12 minutes
+    @Scheduled(fixedRate = 720000) // каждые 12 минут
     public void scheduledUpdateCache() {
-        log.info("Scheduled update cache for latestExchangeRate");
-        evictCache();
-        checkAndUpdateLatestExchangeRate();
+        log.info("Scheduled update cache for exchange rates");
+        scrapeAndSaveData();
     }
 
-    @CachePut(value = "latestExchangeRates", key = "'latestData'")
-    public ExchangeRate updateCache(ExchangeRate exchangeRate) {
-        log.info("Updating cache for latestExchangeRate with: " + exchangeRate);
-        return exchangeRate;
-    }
 }
